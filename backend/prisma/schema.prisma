@@ -1,0 +1,259 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  owner
+  manager
+  potter
+}
+
+enum KilnType {
+  electric
+  gas
+  raku
+  wood
+  studio
+}
+
+enum KilnStatus {
+  available
+  firing
+  cooling
+  maintenance
+  offline
+}
+
+enum BatchStatus {
+  scheduled
+  firing
+  completed
+  failed
+}
+
+enum FiringType {
+  bisque
+  glaze
+  raku
+  stoneware
+  crystalline
+  custom
+}
+
+enum MaintenancePriority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum MaintenanceStatus {
+  open
+  in_progress
+  completed
+  cancelled
+}
+
+enum GlazeCategory {
+  mixing
+  testing
+  application
+  firing_prep
+  inventory
+  other
+}
+
+enum GlazeStatus {
+  scheduled
+  in_progress
+  completed
+  overdue
+}
+
+enum FiringCategory {
+  bisque_firing
+  glaze_firing
+  raku_session
+  studio_rental
+  custom_work
+  other
+}
+
+enum FiringRateStatus {
+  active
+  upcoming
+  archived
+}
+
+enum ClayOrderStatus {
+  pending
+  in_progress
+  completed
+  delivered
+}
+
+model PotteryStudio {
+  id          String   @id @default(uuid())
+  name        String
+  phone       String?
+  address     String?
+  city        String?
+  state       String?
+  zipCode     String?  @map("zip_code")
+  totalKilns  Int      @default(6) @map("total_kilns")
+  timezone    String   @default("America/Chicago")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users            User[]
+  kilns            Kiln[]
+  firingBatches    FiringBatch[]
+  kilnMaintenance  KilnMaintenance[]
+  glazeChecklists  GlazeChecklist[]
+  firingRates      FiringRate[]
+  clayOrders       ClayOrder[]
+
+  @@map("pottery_studios")
+}
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  passwordHash    String   @map("password_hash")
+  firstName       String   @map("first_name")
+  lastName        String   @map("last_name")
+  role            UserRole @default(owner)
+  potteryStudioId String   @map("pottery_studio_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  potteryStudio PotteryStudio @relation(fields: [potteryStudioId], references: [id], onDelete: Cascade)
+
+  @@map("users")
+}
+
+model Kiln {
+  id              String     @id @default(uuid())
+  potteryStudioId String     @map("pottery_studio_id")
+  name            String
+  zone            String
+  kilnType        KilnType   @default(electric) @map("kiln_type")
+  kilnModel       String?    @map("kiln_model")
+  status          KilnStatus @default(available)
+  notes           String?
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  potteryStudio   PotteryStudio     @relation(fields: [potteryStudioId], references: [id], onDelete: Cascade)
+  firingBatches   FiringBatch[]
+  kilnMaintenance KilnMaintenance[]
+
+  @@unique([potteryStudioId, name])
+  @@index([potteryStudioId, status])
+  @@map("kilns")
+}
+
+model FiringBatch {
+  id              String      @id @default(uuid())
+  potteryStudioId String      @map("pottery_studio_id")
+  kilnId          String      @map("kiln_id")
+  scheduledAt     DateTime    @map("scheduled_at")
+  firingType      FiringType  @default(bisque) @map("firing_type")
+  cashAmount      Float       @default(0) @map("cash_amount")
+  cardAmount      Float       @default(0) @map("card_amount")
+  itemCount       Int         @default(1) @map("item_count")
+  coneAdjustment  Float       @default(0) @map("cone_adjustment")
+  status          BatchStatus @default(scheduled)
+  notes           String?
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  potteryStudio PotteryStudio @relation(fields: [potteryStudioId], references: [id], onDelete: Cascade)
+  kiln          Kiln          @relation(fields: [kilnId], references: [id], onDelete: Cascade)
+
+  @@index([potteryStudioId, scheduledAt])
+  @@index([potteryStudioId, status])
+  @@map("firing_batches")
+}
+
+model KilnMaintenance {
+  id              String              @id @default(uuid())
+  potteryStudioId String              @map("pottery_studio_id")
+  kilnId          String              @map("kiln_id")
+  title           String
+  description     String?
+  reportedAt      DateTime            @map("reported_at")
+  completedAt     DateTime?           @map("completed_at")
+  priority        MaintenancePriority @default(medium)
+  status          MaintenanceStatus   @default(open)
+  cost            Float?
+  notes           String?
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  potteryStudio PotteryStudio @relation(fields: [potteryStudioId], references: [id], onDelete: Cascade)
+  kiln          Kiln          @relation(fields: [kilnId], references: [id], onDelete: Cascade)
+
+  @@index([potteryStudioId, status])
+  @@index([potteryStudioId, priority])
+  @@map("kiln_maintenance")
+}
+
+model GlazeChecklist {
+  id              String        @id @default(uuid())
+  potteryStudioId String        @map("pottery_studio_id")
+  title           String
+  description     String?
+  category        GlazeCategory @default(other)
+  zone            String?
+  scheduledAt     DateTime      @map("scheduled_at")
+  status          GlazeStatus   @default(scheduled)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  potteryStudio PotteryStudio @relation(fields: [potteryStudioId], references: [id], onDelete: Cascade)
+
+  @@index([potteryStudioId, scheduledAt])
+  @@map("glaze_checklists")
+}
+
+model FiringRate {
+  id              String           @id @default(uuid())
+  potteryStudioId String           @map("pottery_studio_id")
+  title           String
+  rateCategory    FiringCategory   @default(bisque_firing) @map("rate_category")
+  status          FiringRateStatus @default(active)
+  basePrice       Float            @map("base_price")
+  priceMultiplier Float            @default(1.0) @map("price_multiplier")
+  notes           String?
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  potteryStudio PotteryStudio @relation(fields: [potteryStudioId], references: [id], onDelete: Cascade)
+
+  @@index([potteryStudioId, rateCategory])
+  @@map("firing_rates")
+}
+
+model ClayOrder {
+  id              String          @id @default(uuid())
+  potteryStudioId String          @map("pottery_studio_id")
+  customerName    String          @map("customer_name")
+  clayBody        String          @map("clay_body")
+  supplierName    String?         @map("supplier_name")
+  status          ClayOrderStatus @default(pending)
+  price           Float           @default(0)
+  notes           String?
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  potteryStudio PotteryStudio @relation(fields: [potteryStudioId], references: [id], onDelete: Cascade)
+
+  @@index([potteryStudioId, status])
+  @@map("clay_orders")
+}
